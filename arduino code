@@ -67,12 +67,3 @@ void loop() {
   display.clearDisplay();
 
 }
-
-
-  
-  
-
- 
-
- 
-
