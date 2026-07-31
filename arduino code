@@ -10,18 +10,26 @@
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-
-int cap = A0;
-int charge = 6;
+// lowCharge goes to 10k ohm resistor
+// highCharge goes to 1M ohm resistor if necessary (for 1000nf and less values)
+int capReading = A0;
+int lowCharge = 6;
+int highCharge = 8;
 int discharge = 5;
 unsigned long startTime;
 unsigned long elapsedTime;
-unsigned long resistorVal = 10000;
+unsigned long smallResistorVal = 10000; //10k ohms
+unsigned long largeResistorVal = 1000000; //1M ohm
+float backgroundCap = 0.0; //stray capacitance of board without any capacitors in nf
+float nanoFaradCapacity;
+float microFaradCapacity;
+
 
 void setup() {
-  pinMode(charge,INPUT);
+  pinMode(lowCharge,INPUT);
   pinMode(discharge,INPUT);
-
+  pinMode(highCharge, INPUT);
+  //oled display setup
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed"));
     for (;;);
@@ -30,40 +38,97 @@ void setup() {
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.setCursor(0,28);
+  display.println("Calibrating Meter");
+  display.println("Don't insert in slot!");
+  display.display();
+
+  pinMode(discharge, OUTPUT);
+  digitalWrite(discharge,LOW);
+  delay(500);
+  pinMode(discharge, INPUT);
+
+  //testing for stray capacitance using 1M ohm resistor
+  pinMode(highCharge, OUTPUT);
+  digitalWrite(highCharge, HIGH);
+  startTime = micros();
+  while(analogRead(capReading)<648){}
+  elapsedTime = micros() -startTime;  
+  backgroundCap =  ((float)elapsedTime/(float)largeResistorVal) * 1000.0;
+  display.clearDisplay();
+
   
-  Serial.begin(9600);
 }
 
 void loop() {
-  pinMode(discharge,OUTPUT);
-  digitalWrite(discharge, LOW);
-  while(analogRead(cap)>0){
-
-  }
-  pinMode(discharge, INPUT);
-  delay(1000);
-  pinMode(charge, OUTPUT);
-  digitalWrite(charge, HIGH);
-  startTime = millis();
-  while(analogRead(cap) < 648){
-
-  }
-
-  elapsedTime = millis() - startTime;
-  pinMode(charge, INPUT);
-
+  nanoFaradCapacity =0.0;
+  microFaradCapacity =0.0;
   
-  float capacity = ((float)elapsedTime/(float)resistorVal) * 1000.0;
+  pinMode(lowCharge, OUTPUT);
+  digitalWrite(lowCharge, HIGH);
+  startTime = micros();
+  while(analogRead(capReading) < 648){}
+
+  elapsedTime = micros() - startTime;
+  digitalWrite(lowCharge, LOW);
+  pinMode(lowCharge, INPUT);
+  
+  microFaradCapacity = ((float)elapsedTime/(float)smallResistorVal);
+
+  pinMode(discharge, OUTPUT);
+  digitalWrite(discharge, LOW);
+  delay(500);
+  pinMode(discharge,INPUT);
+
+  // if capacity is under 1 microfarad,   program redoes testing and switches 
+  // to the higher resis value for better reading (used for nf capacitors)
+  if(microFaradCapacity < 1.0){
+    startTime = 0;
+    pinMode(highCharge, OUTPUT);
+    digitalWrite(highCharge, HIGH);
+    startTime = micros();
+    while(analogRead(capReading) < 648){}
+    elapsedTime = micros() - startTime;
+    digitalWrite(highCharge,LOW);
+    pinMode(highCharge, INPUT);
+    nanoFaradCapacity = (((float)elapsedTime/(float)largeResistorVal) * 1000.0) - backgroundCap;
+    delay(1000);
+  }
+  
+
+  //displays results on oled
+  display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(WHITE);
-  display.setCursor(0,28);
-  display.print(capacity);
-  display.println("uF");
+  display.setCursor(3,28);
+
+
+  //print in nanofarads if needed
+  if(microFaradCapacity < 0.05 && nanoFaradCapacity < 0.1){
+    display.println("Capacitance is:");
+    display.println("0.0 nF (empty)");
+    display.print("Stray is: ");
+    display.print(backgroundCap);
+    display.print(" nF");
+  }else if(microFaradCapacity <1.0){
+    display.println("Capacitance is:");
+    display.print(nanoFaradCapacity, 1);
+    display.print("nF");
+  }else{
+    display.println("Capacitance is:");
+    display.print(microFaradCapacity, 2);
+    display.print("uF");
+  }
   display.display();
 
-  
-  delay(1500);
- 
+
+
+  pinMode(discharge,OUTPUT);
+  digitalWrite(discharge, LOW);
+  delay(500);
+  pinMode(discharge, INPUT);
+
+  delay(500);
   display.clearDisplay();
+  delay(1000);
 
 }
