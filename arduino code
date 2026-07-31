@@ -20,7 +20,7 @@ unsigned long startTime;
 unsigned long elapsedTime;
 unsigned long smallResistorVal = 10000; //10k ohms
 unsigned long largeResistorVal = 1000000; //1M ohm
-float backgroundCap = 0.0; //stray capacitance of board without any capacitors in nf
+float backgroundCap = 0.0; //stray capacitance of board without any capacitors (units in nf)
 float nanoFaradCapacity;
 float microFaradCapacity;
 
@@ -38,6 +38,7 @@ void setup() {
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.setCursor(0,28);
+  //finds the stray capacitance in system (useful for breadboard)
   display.println("Calibrating Meter");
   display.println("Don't insert in slot!");
   display.display();
@@ -54,6 +55,8 @@ void setup() {
   while(analogRead(capReading)<648){}
   elapsedTime = micros() -startTime;  
   backgroundCap =  ((float)elapsedTime/(float)largeResistorVal) * 1000.0;
+  digitalWrite(highCharge, LOW);
+  pinMode(highCharge, INPUT);
   display.clearDisplay();
 
   
@@ -63,6 +66,7 @@ void loop() {
   nanoFaradCapacity =0.0;
   microFaradCapacity =0.0;
   
+  //initial loop using 10k ohm resistor
   pinMode(lowCharge, OUTPUT);
   digitalWrite(lowCharge, HIGH);
   startTime = micros();
@@ -95,7 +99,7 @@ void loop() {
   }
   
 
-  //displays results on oled
+  //displays results on oled display
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(WHITE);
